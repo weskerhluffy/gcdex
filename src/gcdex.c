@@ -622,7 +622,10 @@ typedef struct gcdex_datos {
 	entero_largo_sin_signo sumatoria_totiente[GCDEX_MAX_VALOR + 1];
 	entero_largo_sin_signo valores_funcion[GCDEX_MAX_VALOR + 1];
 	phi_euler_datos phi_datos;
+	entero_largo_sin_signo cache[GCDEX_MAX_VALOR + 1];
 } gcdex_datos;
+
+
 
 CACA_COMUN_FUNC_STATICA entero_largo_sin_signo gcdex_calcula_valor_funcion(
 		natural n) {
@@ -633,16 +636,23 @@ CACA_COMUN_FUNC_STATICA entero_largo_sin_signo gcdex_core(natural n,
 		gcdex_datos *d) {
 	natural i, la;
 	entero_largo_sin_signo r = 0;
-	for (i = 1; i <= n; i = la + 1) {
-		la = n / (n / i);
-		natural ci = n / i;
-		//n / x yields the same value for i <= x <= la.
-		caca_log_debug(
-				"para i %u ci %u valor func %llu, la %u suma %llu i-1 %u suma %llu",
-				i, ci, d->valores_funcion[ci], la, d->sumatoria_totiente[la],
-				i-1, d->sumatoria_totiente[i-1]);
-		r += d->valores_funcion[ci]
-				* (d->sumatoria_totiente[la] - d->sumatoria_totiente[i - 1]);
+	entero_largo_sin_signo *valores_funcion = d->valores_funcion;
+	entero_largo_sin_signo *sumatoria_totiente = d->sumatoria_totiente;
+	if (d->cache[n]) {
+		r = d->cache[n];
+	} else {
+		for (i = 1; i <= n; i = la + 1) {
+			la = n / (n / i);
+			natural ci = n / i;
+			//n / x yields the same value for i <= x <= la.
+			printf(
+					"para i %u ci %u valor func %llu, la %u suma %llu i-1 %u suma %llu\n",
+					i, ci, d->valores_funcion[ci], la,
+					d->sumatoria_totiente[la], i-1, d->sumatoria_totiente[i-1]);
+			r += valores_funcion[ci]
+					* (sumatoria_totiente[la] - sumatoria_totiente[i - 1]);
+		}
+		d->cache[n] = r;
 	}
 	return r;
 }
@@ -668,6 +678,7 @@ CACA_COMUN_FUNC_STATICA void gcdex_main() {
 
 	while (scanf("%u\n", &n) > 0 && n) {
 		entero_largo_sin_signo r = gcdex_core(n, d);
+//		entero_largo_sin_signo r = 0;
 		printf("%llu\n", r);
 	}
 }
