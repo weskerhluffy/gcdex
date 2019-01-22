@@ -52,3 +52,6 @@ Mkfile.old
 dkms.conf
 src/aaa
 src/gcdex
+*.swp
+com
+src/ai

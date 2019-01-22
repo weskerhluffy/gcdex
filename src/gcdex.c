@@ -11,6 +11,11 @@
 // XXX: https://www.quora.com/profile/Surya-Kiran/Posts/A-Dance-with-Mobius-Function
 // XXX: https://www.spoj.com/problems/GCDEX/
 // XXX: https://math.stackexchange.com/questions/1750854/how-to-calculate-double-sum-of-gcdi-j
+// XXX: http://codeforces.com/blog/entry/59248
+// XXX: https://codeforces.com/blog/entry/7308
+// XXX: https://www.geeksforgeeks.org/summation-gcd-pairs-n/
+// XXX: https://www.quora.com/How-can-I-solve-the-problem-GCD-Extreme-GCDEX-on-SPOJ
+// XXX: https://math.stackexchange.com/questions/1750854/how-to-calculate-double-sum-of-gcdi-j
 #if 1
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -619,42 +624,95 @@ void phi_euler_no_divisible_encontrado_cb(natural primo, natural idx_primo,
 
 #define GCDEX_MAX_VALOR PHI_EULER_NUM_MAX
 typedef struct gcdex_datos {
-	entero_largo_sin_signo sumatoria_totiente[GCDEX_MAX_VALOR + 1];
+	entero_largo_sin_signo sumatoria_function[GCDEX_MAX_VALOR + 1];
 	entero_largo_sin_signo valores_funcion[GCDEX_MAX_VALOR + 1];
 	phi_euler_datos phi_datos;
 	entero_largo_sin_signo cache[GCDEX_MAX_VALOR + 1];
 } gcdex_datos;
 
-
-
-CACA_COMUN_FUNC_STATICA entero_largo_sin_signo gcdex_calcula_valor_funcion(
-		natural n) {
-	return ((entero_largo_sin_signo) n * ((entero_largo_sin_signo) n - 1)) >> 1;
+CACA_COMUN_FUNC_STATICA natural gcdex_calcula_potencia_primo(entero_largo n,
+		natural p) {
+	natural i = 0;
+	natural n_orig = n;
+	while (!(n % p)) {
+		n /= p;
+		i++;
+	}
+	caca_log_debug("potencia primo de %u en %u es %u", p, n_orig, i);
+	return i;
 }
 
-CACA_COMUN_FUNC_STATICA entero_largo_sin_signo gcdex_core(natural n,
-		gcdex_datos *d) {
-	natural i, la;
-	entero_largo_sin_signo r = 0;
-	entero_largo_sin_signo *valores_funcion = d->valores_funcion;
-	entero_largo_sin_signo *sumatoria_totiente = d->sumatoria_totiente;
-	if (d->cache[n]) {
-		r = d->cache[n];
-	} else {
-		for (i = 1; i <= n; i = la + 1) {
-			la = n / (n / i);
-			natural ci = n / i;
-			//n / x yields the same value for i <= x <= la.
-			printf(
-					"para i %u ci %u valor func %llu, la %u suma %llu i-1 %u suma %llu\n",
-					i, ci, d->valores_funcion[ci], la,
-					d->sumatoria_totiente[la], i-1, d->sumatoria_totiente[i-1]);
-			r += valores_funcion[ci]
-					* (sumatoria_totiente[la] - sumatoria_totiente[i - 1]);
-		}
-		d->cache[n] = r;
-	}
-	return r;
+void gcdex_primo_encontrado_cb(natural primo, natural idx_primo, void *cb_ctx) {
+	gcdex_datos *gd = cb_ctx;
+	phi_euler_datos *d = &gd->phi_datos;
+	gd->valores_funcion[primo] = (entero_largo_sin_signo) primo + (primo - 1);
+	caca_log_debug("f[%u]=%llu", primo, gd->valores_funcion[primo]);
+}
+
+void gcdex_divisible_encontrado_cb(natural primo, natural idx_primo,
+		natural compuesto, void *cb_ctx) {
+	gcdex_datos *gd = cb_ctx;
+	phi_euler_datos *d = &gd->phi_datos;
+	natural nuevo_comp = compuesto * primo;
+	natural potencia_contribucion_primo = gcdex_calcula_potencia_primo(
+			compuesto, primo);
+	natural contribucion_primo = pow(primo, potencia_contribucion_primo);
+	natural complemento_contribucion_primo = compuesto / contribucion_primo;
+
+	entero_largo_sin_signo factor_contribucion_primo =
+			gd->valores_funcion[contribucion_primo];
+	entero_largo_sin_signo factor_complemento_contribucion_primo =
+			gd->valores_funcion[compuesto] / factor_contribucion_primo;
+
+	assert_timeout(
+			factor_complemento_contribucion_primo
+					== gd->valores_funcion[complemento_contribucion_primo]);
+
+	entero_largo_sin_signo nuevo_factor_contribucion_primo =
+			(factor_contribucion_primo - contribucion_primo)
+					* (entero_largo_sin_signo) primo
+					+ (entero_largo_sin_signo) contribucion_primo
+							* (entero_largo_sin_signo) (primo - 1)
+					+ (entero_largo_sin_signo) contribucion_primo
+							* (entero_largo_sin_signo) primo;
+
+	gd->valores_funcion[nuevo_comp] = nuevo_factor_contribucion_primo
+			* factor_complemento_contribucion_primo;
+
+	caca_log_debug("f[%u]=%llu", nuevo_comp, gd->valores_funcion[nuevo_comp]);
+}
+
+void gcdex_no_divisible_encontrado_cb(natural primo, natural idx_primo,
+		natural compuesto, void *cb_ctx) {
+	gcdex_datos *gd = cb_ctx;
+	phi_euler_datos *d = &gd->phi_datos;
+	natural nuevo_comp = compuesto * primo;
+	gd->valores_funcion[nuevo_comp] = gd->valores_funcion[primo]
+			* gd->valores_funcion[compuesto];
+	caca_log_debug("f[%u]=%llu", nuevo_comp, gd->valores_funcion[nuevo_comp]);
+}
+
+void gcdex_conjunto_divisible_encontrado_cb(natural primo, natural idx_primo,
+		natural compuesto, void *cb_ctx) {
+	gcdex_datos *sd = cb_ctx;
+	phi_euler_divisible_encontrado_cb(primo, idx_primo, compuesto,
+			&sd->phi_datos);
+	gcdex_divisible_encontrado_cb(primo, idx_primo, compuesto, cb_ctx);
+}
+
+void gcdex_conjunto_no_divisible_encontrado_cb(natural primo, natural idx_primo,
+		natural compuesto, void *cb_ctx) {
+	gcdex_datos *sd = cb_ctx;
+	phi_euler_no_divisible_encontrado_cb(primo, idx_primo, compuesto,
+			&sd->phi_datos);
+	gcdex_no_divisible_encontrado_cb(primo, idx_primo, compuesto, cb_ctx);
+}
+
+void gcdex_conjunto_primo_encontrado_cb(natural primo, natural idx_primo,
+		void *cb_ctx) {
+	gcdex_datos *sd = cb_ctx;
+	phi_euler_primo_encontrado_cb(primo, idx_primo, &sd->phi_datos);
+	gcdex_primo_encontrado_cb(primo, idx_primo, cb_ctx);
 }
 
 CACA_COMUN_FUNC_STATICA void gcdex_main() {
@@ -663,22 +721,20 @@ CACA_COMUN_FUNC_STATICA void gcdex_main() {
 	d = calloc(1, sizeof(gcdex_datos));
 	assert_timeout(d);
 
-	primos_caca_criba(GCDEX_MAX_VALOR, phi_euler_primo_encontrado_cb, NULL,
-			phi_euler_divisible_encontrado_cb,
-			phi_euler_no_divisible_encontrado_cb, &d->phi_datos);
-
 	d->phi_datos.phi[1] = 1;
+	d->valores_funcion[1] = 1;
+	primos_caca_criba(GCDEX_MAX_VALOR, gcdex_conjunto_primo_encontrado_cb, NULL,
+			gcdex_conjunto_divisible_encontrado_cb,
+			gcdex_conjunto_no_divisible_encontrado_cb, d);
+
 	for (natural i = 1; i <= GCDEX_MAX_VALOR; i++) {
-		d->sumatoria_totiente[i] = (entero_largo_sin_signo) d->phi_datos.phi[i]
-				+ d->sumatoria_totiente[i - 1];
-		caca_log_debug("valor tot %u %llu", i, d->phi_datos.phi[i]);
-		d->valores_funcion[i] = gcdex_calcula_valor_funcion(i);
-		caca_log_debug("valor func %u %llu", i, d->valores_funcion[i]);
+		d->sumatoria_function[i] = d->sumatoria_function[i - 1]
+				+ d->valores_funcion[i] - i;
+		caca_log_debug("f[%u]=%llu", i, d->valores_funcion[i], i);
 	}
 
 	while (scanf("%u\n", &n) > 0 && n) {
-		entero_largo_sin_signo r = gcdex_core(n, d);
-//		entero_largo_sin_signo r = 0;
+		entero_largo_sin_signo r = d->sumatoria_function[n];
 		printf("%llu\n", r);
 	}
 }
